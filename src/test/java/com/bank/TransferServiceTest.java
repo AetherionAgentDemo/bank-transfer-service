@@ -75,4 +75,27 @@ class TransferServiceTest {
         // package (com.bank), so it can call it directly.
         account.withdraw(amount);
     }
+
+    @Test
+    void transferRejectsExceedingDailyLimit() {
+        TransferService service = new TransferService();
+        Account from = new Account("A4", "David", 200000.0);
+        Account to = new Account("A5", "Eve", 0.0);
+
+        // Perform some transfers that do not exceed the limit
+        service.transfer(from, to, 50000.0);
+        service.transfer(from, to, 40000.0);
+
+        // Try a transfer that would exceed the daily limit
+        assertThrows(IllegalStateException.class, () -> service.transfer(from, to, 20000.0));
+
+        // Ensure balances were not changed by the rejected transfer
+        assertEquals(110000.0, from.getBalance(), 0.001);
+        assertEquals(90000.0, to.getBalance(), 0.001);
+
+        // Try another transfer to confirm service is still operational
+        service.transfer(from, to, 10000.0);
+        assertEquals(100000.0, from.getBalance(), 0.001);
+        assertEquals(100000.0, to.getBalance(), 0.001);
+    }
 }
