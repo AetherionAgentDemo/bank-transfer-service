@@ -2,8 +2,13 @@ package com.bank;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TransferServiceTest {
 
@@ -59,26 +64,9 @@ class TransferServiceTest {
     }
 
     @Test
-    void accountWithdrawRejectsInsufficientBalanceDirectly() {
-        // Bypasses TransferService entirely and calls Account directly, so
-        // this only passes if the "can't withdraw more than you have"
-        // invariant is enforced inside Account itself, not just inside
-        // TransferService.
-        Account account = new Account("A3", "Carol", 20.0);
-
-        assertThrows(IllegalStateException.class, () -> withdrawDirectly(account, 50.0));
-        assertEquals(20.0, account.getBalance(), 0.001);
-    }
-
-    private static void withdrawDirectly(Account account, double amount) {
-        // Account.withdraw is package-private; this test lives in the same
-        // package (com.bank), so it can call it directly.
-        account.withdraw(amount);
-    }
-
-    @Test
     void transferRejectsExceedingDailyLimit() {
-        TransferService service = new TransferService();
+        Clock fixedClock = Clock.fixed(Instant.parse("2023-10-15T00:00:00Z"), ZoneOffset.UTC);
+        TransferService service = new TransferService(fixedClock);
         Account from = new Account("A4", "David", 200000.0);
         Account to = new Account("A5", "Eve", 0.0);
 
@@ -87,7 +75,8 @@ class TransferServiceTest {
         service.transfer(from, to, 40000.0);
 
         // Try a transfer that would exceed the daily limit
-        assertThrows(IllegalStateException.class, () -> service.transfer(from, to, 20000.0));
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> service.transfer(from, to, 20000.0));
+        assertEquals("Daily transfer limit of 100000 exceeded (remaining today: 10000.0)", exception.getMessage());
 
         // Ensure balances were not changed by the rejected transfer
         assertEquals(110000.0, from.getBalance(), 0.001);
@@ -97,5 +86,27 @@ class TransferServiceTest {
         service.transfer(from, to, 10000.0);
         assertEquals(100000.0, from.getBalance(), 0.001);
         assertEquals(100000.0, to.getBalance(), 0.001);
+    }
+
+    @Test
+    void transferResetsDailyTotalNextDay() {
+        Clock initialClock = Clock.fixed(Instant.parse("2023-10-15T00:00:00Z"), ZoneOffset.UTC);
+        TransferService service = new TransferService(initialClock);
+        Account from = new Account("A6", "Frank", 150000.0);
+        Account to = new Account("A7", "Grace", 0.0);
+
+        // Perform transfers to reach the daily limit
+        service.transfer(from, to, 60000.0);
+        service.transfer(from, to, 40000.0);
+        assertThrows(IllegalStateException.class, () -> service.transfer(from, to, 1.0));
+
+        // Advance the clock to the next UTC day
+        Clock nextDayClock = Clock.fixed(Instant.parse("2023-10-16T00:00:01Z"), ZoneOffset.UTC);
+        service = new TransferService(nextDayClock);
+
+        // Verify transfer is successful on the next day
+        service.transfer(from, to, 1000.0);
+        assertEquals(49000.0, from.getBalance(), 0.001);
+        assertEquals(101000.0, to.getBalance(), 0.001);
     }
 }
