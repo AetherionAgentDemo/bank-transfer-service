@@ -1,9 +1,9 @@
 package com.bank;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Date;
-import java.util.Calendar;
 
 /**
  * Moves money between two {@link Account}s and keeps a log of every
@@ -12,7 +12,16 @@ import java.util.Calendar;
 public class TransferService {
 
     private static final double DAILY_LIMIT = 100000.0;
+    private final Clock clock;
     private final List<Transaction> history = new ArrayList<>();
+
+    public TransferService(Clock clock) {
+        this.clock = clock;
+    }
+
+    public TransferService() {
+        this(Clock.systemUTC());
+    }
 
     /**
      * Move {@code amount} from {@code from} to {@code to}.
@@ -27,10 +36,13 @@ public class TransferService {
         if (from.getBalance() < amount) {
             throw new IllegalStateException("Insufficient balance");
         }
+
         double dailyTotal = calculateDailyTotal(from);
         if (dailyTotal + amount > DAILY_LIMIT) {
-            throw new IllegalStateException("Daily transfer limit of 100000 exceeded");
+            double remainingAmount = DAILY_LIMIT - dailyTotal;
+            throw new IllegalStateException("Daily transfer limit exceeded. Remaining amount allowed: " + remainingAmount);
         }
+
         from.withdraw(amount);
         to.deposit(amount);
 
@@ -45,7 +57,7 @@ public class TransferService {
 
     private double calculateDailyTotal(Account account) {
         double total = 0.0;
-        Date today = Calendar.getInstance().getTime();
+        LocalDate today = LocalDate.now(clock);
         for (Transaction transaction : history) {
             if (transaction.getFromAccountId().equals(account.getAccountId()) && isSameDay(transaction.getDate(), today)) {
                 total += transaction.getAmount();
@@ -54,12 +66,7 @@ public class TransferService {
         return total;
     }
 
-    private boolean isSameDay(Date date1, Date date2) {
-        Calendar cal1 = Calendar.getInstance();
-        Calendar cal2 = Calendar.getInstance();
-        cal1.setTime(date1);
-        cal2.setTime(date2);
-        return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-               cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR);
+    private boolean isSameDay(LocalDate date1, LocalDate date2) {
+        return date1.equals(date2);
     }
 }
