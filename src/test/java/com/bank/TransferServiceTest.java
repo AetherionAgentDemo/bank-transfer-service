@@ -1,6 +1,9 @@
 package com.bank;
 
 import org.junit.jupiter.api.Test;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -78,24 +81,35 @@ class TransferServiceTest {
 
     @Test
     void transferRejectsExceedingDailyLimit() {
-        TransferService service = new TransferService();
+        Clock fixedClock = Clock.fixed(Instant.parse("2023-10-20T00:00:00Z"), ZoneId.of("UTC"));
+        TransferService service = new TransferService(fixedClock);
         Account from = new Account("A4", "David", 200000.0);
         Account to = new Account("A5", "Eve", 0.0);
 
         // Perform some transfers that do not exceed the limit
-        service.transfer(from, to, 50000.0);
+        service.transfer(from, to, 60000.0);
+        assertEquals(140000.0, from.getBalance(), 0.001);
+        assertEquals(60000.0, to.getBalance(), 0.001);
+
         service.transfer(from, to, 40000.0);
-
-        // Try a transfer that would exceed the daily limit
-        assertThrows(IllegalStateException.class, () -> service.transfer(from, to, 20000.0));
-
-        // Ensure balances were not changed by the rejected transfer
-        assertEquals(110000.0, from.getBalance(), 0.001);
-        assertEquals(90000.0, to.getBalance(), 0.001);
-
-        // Try another transfer to confirm service is still operational
-        service.transfer(from, to, 10000.0);
         assertEquals(100000.0, from.getBalance(), 0.001);
         assertEquals(100000.0, to.getBalance(), 0.001);
+
+        // Try a transfer that would exceed the daily limit
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> service.transfer(from, to, 1.0));
+        assertEquals("Daily transfer limit of 100000 exceeded. Remaining allowable transfer: 0.0", exception.getMessage());
+
+        // Ensure balances were not changed by the rejected transfer
+        assertEquals(100000.0, from.getBalance(), 0.001);
+        assertEquals(100000.0, to.getBalance(), 0.001);
+
+        // Advance the clock to the next day
+        Clock nextDayClock = Clock.fixed(Instant.parse("2023-10-21T00:00:00Z"), ZoneId.of("UTC"));
+        service = new TransferService(nextDayClock);
+
+        // Try another transfer to confirm service is still operational
+        service.transfer(from, to, 1.0);
+        assertEquals(99999.0, from.getBalance(), 0.001);
+        assertEquals(100001.0, to.getBalance(), 0.001);
     }
 }
