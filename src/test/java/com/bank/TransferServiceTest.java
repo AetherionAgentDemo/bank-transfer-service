@@ -5,11 +5,15 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+
 class TransferServiceTest {
 
     @Test
     void transferMovesMoneyBetweenAccounts() {
-        TransferService service = new TransferService();
+        TransferService service = new TransferService(Clock.systemUTC());
         Account from = new Account("A1", "Alice", 100.0);
         Account to = new Account("A2", "Bob", 50.0);
 
@@ -21,7 +25,7 @@ class TransferServiceTest {
 
     @Test
     void transferRecordsTransactionHistory() {
-        TransferService service = new TransferService();
+        TransferService service = new TransferService(Clock.systemUTC());
         Account from = new Account("A1", "Alice", 100.0);
         Account to = new Account("A2", "Bob", 50.0);
 
@@ -33,7 +37,7 @@ class TransferServiceTest {
 
     @Test
     void transferRejectsWhenInsufficientBalance() {
-        TransferService service = new TransferService();
+        TransferService service = new TransferService(Clock.systemUTC());
         Account from = new Account("A1", "Alice", 10.0);
         Account to = new Account("A2", "Bob", 50.0);
 
@@ -46,7 +50,7 @@ class TransferServiceTest {
 
     @Test
     void transferRejectsNonPositiveAmount() {
-        TransferService service = new TransferService();
+        TransferService service = new TransferService(Clock.systemUTC());
         Account from = new Account("A1", "Alice", 100.0);
         Account to = new Account("A2", "Bob", 50.0);
 
@@ -78,24 +82,30 @@ class TransferServiceTest {
 
     @Test
     void transferRejectsExceedingDailyLimit() {
-        TransferService service = new TransferService();
+        Clock fixedClock = Clock.fixed(Instant.parse("2026-10-08T10:00:00Z"), ZoneOffset.UTC);
+        TransferService service = new TransferService(fixedClock);
         Account from = new Account("A4", "David", 200000.0);
         Account to = new Account("A5", "Eve", 0.0);
 
         // Perform some transfers that do not exceed the limit
-        service.transfer(from, to, 50000.0);
+        service.transfer(from, to, 60000.0);
         service.transfer(from, to, 40000.0);
 
         // Try a transfer that would exceed the daily limit
-        assertThrows(IllegalStateException.class, () -> service.transfer(from, to, 20000.0));
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> service.transfer(from, to, 1));
+        assertEquals("Daily transfer limit of 100000 exceeded. Remaining: 0.0", exception.getMessage());
 
         // Ensure balances were not changed by the rejected transfer
-        assertEquals(110000.0, from.getBalance(), 0.001);
-        assertEquals(90000.0, to.getBalance(), 0.001);
-
-        // Try another transfer to confirm service is still operational
-        service.transfer(from, to, 10000.0);
         assertEquals(100000.0, from.getBalance(), 0.001);
         assertEquals(100000.0, to.getBalance(), 0.001);
+
+        // Advance clock to next UTC day
+        fixedClock = Clock.fixed(Instant.parse("2026-10-09T01:00:00Z"), ZoneOffset.UTC);
+        service = new TransferService(fixedClock);
+
+        // Try another transfer to confirm service is still operational
+        service.transfer(from, to, 50000.0);
+        assertEquals(50000.0, from.getBalance(), 0.001);
+        assertEquals(150000.0, to.getBalance(), 0.001);
     }
 }
