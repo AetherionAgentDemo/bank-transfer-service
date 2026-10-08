@@ -2,6 +2,10 @@ package com.bank;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -78,24 +82,30 @@ class TransferServiceTest {
 
     @Test
     void transferRejectsExceedingDailyLimit() {
-        TransferService service = new TransferService();
+        Clock clock = Clock.fixed(Instant.parse("2023-10-23T00:00:00Z"), ZoneOffset.UTC);
+        TransferService service = new TransferService(clock);
         Account from = new Account("A4", "David", 200000.0);
         Account to = new Account("A5", "Eve", 0.0);
 
         // Perform some transfers that do not exceed the limit
-        service.transfer(from, to, 50000.0);
+        service.transfer(from, to, 60000.0);
         service.transfer(from, to, 40000.0);
 
         // Try a transfer that would exceed the daily limit
-        assertThrows(IllegalStateException.class, () -> service.transfer(from, to, 20000.0));
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> service.transfer(from, to, 1.0));
+        assertEquals("Daily transfer limit of 100000 exceeded (remaining today: 0.0)", exception.getMessage());
 
         // Ensure balances were not changed by the rejected transfer
-        assertEquals(110000.0, from.getBalance(), 0.001);
-        assertEquals(90000.0, to.getBalance(), 0.001);
-
-        // Try another transfer to confirm service is still operational
-        service.transfer(from, to, 10000.0);
         assertEquals(100000.0, from.getBalance(), 0.001);
         assertEquals(100000.0, to.getBalance(), 0.001);
+
+        // Simulate next UTC day
+        Clock nextDayClock = Clock.fixed(Instant.parse("2023-10-24T00:00:00Z"), ZoneOffset.UTC);
+        TransferService nextDayService = new TransferService(nextDayClock);
+
+        // Try another transfer to confirm service is still operational
+        nextDayService.transfer(from, to, 10000.0);
+        assertEquals(90000.0, from.getBalance(), 0.001);
+        assertEquals(110000.0, to.getBalance(), 0.001);
     }
 }

@@ -4,6 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Date;
 import java.util.Calendar;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 
 /**
  * Moves money between two {@link Account}s and keeps a log of every
@@ -13,6 +17,23 @@ public class TransferService {
 
     private static final double DAILY_LIMIT = 100000.0;
     private final List<Transaction> history = new ArrayList<>();
+    private final Clock clock;
+
+    /**
+     * Constructor that initializes the service with a given Clock.
+     *
+     * @param clock Clock used to determine the current time for calculations.
+     */
+    public TransferService(Clock clock) {
+        this.clock = clock;
+    }
+
+    /**
+     * Default constructor that initializes the service with the system default UTC Clock.
+     */
+    public TransferService() {
+        this(Clock.systemUTC());
+    }
 
     /**
      * Move {@code amount} from {@code from} to {@code to}.
@@ -29,7 +50,8 @@ public class TransferService {
         }
         double dailyTotal = calculateDailyTotal(from);
         if (dailyTotal + amount > DAILY_LIMIT) {
-            throw new IllegalStateException("Daily transfer limit of 100000 exceeded");
+            double remaining = DAILY_LIMIT - dailyTotal;
+            throw new IllegalStateException("Daily transfer limit of 100000 exceeded (remaining today: " + remaining + ")");
         }
         from.withdraw(amount);
         to.deposit(amount);
@@ -45,21 +67,17 @@ public class TransferService {
 
     private double calculateDailyTotal(Account account) {
         double total = 0.0;
-        Date today = Calendar.getInstance().getTime();
+        LocalDate today = LocalDate.now(clock);
         for (Transaction transaction : history) {
-            if (transaction.getFromAccountId().equals(account.getAccountId()) && isSameDay(transaction.getDate(), today)) {
+            if (transaction.getFromAccountId().equals(account.getAccountId()) && isSameDay(transaction.getTimestamp(), today)) {
                 total += transaction.getAmount();
             }
         }
         return total;
     }
 
-    private boolean isSameDay(Date date1, Date date2) {
-        Calendar cal1 = Calendar.getInstance();
-        Calendar cal2 = Calendar.getInstance();
-        cal1.setTime(date1);
-        cal2.setTime(date2);
-        return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-               cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR);
+    private boolean isSameDay(Instant timestamp, LocalDate today) {
+        LocalDate transactionDate = LocalDate.ofInstant(timestamp, ZoneOffset.UTC);
+        return transactionDate.equals(today);
     }
 }
