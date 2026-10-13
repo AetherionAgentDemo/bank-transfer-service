@@ -1,38 +1,38 @@
 package com.bank;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
-/**
- * Moves money between two {@link Account}s and keeps a log of every
- * transfer made.
- */
 public class TransferService {
 
     private final List<Transaction> history = new ArrayList<>();
 
-    /**
-     * Move {@code amount} from {@code from} to {@code to}.
-     *
-     * Validates that {@code amount} is positive and that {@code from}
-     * has sufficient balance before proceeding with the transfer.
-     */
-    public Transaction transfer(Account from, Account to, double amount) {
+    public void transfer(String fromAccountId, String toAccountId, double amount, Account fromAccount, Account toAccount) {
         if (amount <= 0) {
             throw new IllegalArgumentException("Amount must be positive");
         }
-        if (from.getBalance() < amount) {
-            throw new IllegalStateException("Insufficient balance");
+        if (fromAccount.getBalance() < amount) {
+            throw new IllegalStateException("Insufficient funds");
         }
-        from.withdraw(amount);
-        to.deposit(amount);
-
-        Transaction transaction = new Transaction(from.getAccountId(), to.getAccountId(), amount);
-        history.add(transaction);
-        return transaction;
+        fromAccount.debit(amount);
+        toAccount.credit(amount);
+        history.add(new Transaction(fromAccountId, toAccountId, amount));
     }
 
     public List<Transaction> getHistory() {
-        return history;
+        return Collections.unmodifiableList(history);
+    }
+
+    public List<Transaction> getHistoryFor(String accountId) {
+        if (accountId == null || accountId.isEmpty()) {
+            throw new IllegalArgumentException("accountId is required");
+        }
+        List<Transaction> filtered = history.stream()
+                .filter(t -> t.getFromAccountId().equals(accountId)
+                          || t.getToAccountId().equals(accountId))
+                .collect(Collectors.toList());
+        return Collections.unmodifiableList(filtered);
     }
 }
