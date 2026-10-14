@@ -35,4 +35,17 @@ public class TransferService {
     public List<Transaction> getHistory() {
         return history;
     }
+    
+    public int countTransfersFor(String accountId) {
+        if (accountId == null || accountId.isBlank()) {
+            throw new IllegalArgumentException("accountId is required");
+        }
+        int count = 0;
+        for (Transaction transaction : history) {
+            if (accountId.equals(transaction.getSenderId()) || accountId.equals(transaction.getRecipientId())) {
+                count++;
+            }
+        }
+        return count;
+    }
 }
