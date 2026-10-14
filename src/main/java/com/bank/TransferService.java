@@ -35,4 +35,24 @@ public class TransferService {
     public List<Transaction> getHistory() {
         return history;
     }
+
+    /**
+     * Counts the number of transfers involving the given account ID.
+     *
+     * @param accountId the account ID to search for
+     * @return the count of transfers
+     * @throws IllegalArgumentException if the account ID is null or blank
+     */
+    public int countTransfersFor(String accountId) {
+        if (accountId == null || accountId.trim().isEmpty()) {
+            throw new IllegalArgumentException("accountId is required");
+        }
+        int count = 0;
+        for (Transaction transaction : history) {
+            if (accountId.equals(transaction.getFromAccountId()) || accountId.equals(transaction.getToAccountId())) {
+                count++;
+            }
+        }
+        return count;
+    }
 }
