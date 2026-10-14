@@ -13,6 +13,9 @@ public class TransferService {
         if (amount <= 0) {
             throw new IllegalArgumentException("Amount must be positive");
         }
+        if (fromAccountId.equals(toAccountId)) {
+            throw new IllegalArgumentException("Cannot transfer to the same account");
+        }
         if (fromAccount.getBalance() < amount) {
             throw new IllegalStateException("Insufficient funds");
         }

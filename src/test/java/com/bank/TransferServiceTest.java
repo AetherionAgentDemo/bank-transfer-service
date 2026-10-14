@@ -150,4 +150,56 @@ class TransferServiceTest {
         // Internal history must be untouched
         assertEquals(1, service.getHistory().size());
     }
+
+    // -----------------------------------------------------------------------
+    // sameAccountTransferThrowsSameAccountException
+    // -----------------------------------------------------------------------
+    @Test
+    void sameAccountTransferThrowsSameAccountException() {
+        Account account = new Account("ACC-123", "Alice", 100.0);
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> service.transfer("ACC-123", "ACC-123", 10.0, account, account)
+        );
+        assertEquals("Cannot transfer to the same account", ex.getMessage());
+    }
+
+    // -----------------------------------------------------------------------
+    // sameAccountTransferLeavesBalanceAndHistoryUnchanged
+    // -----------------------------------------------------------------------
+    @Test
+    void sameAccountTransferLeavesBalanceAndHistoryUnchanged() {
+        Account account = new Account("ACC-123", "Alice", 100.0);
+        int historyBefore = service.getHistory().size();
+        assertThrows(IllegalArgumentException.class,
+            () -> service.transfer("ACC-123", "ACC-123", 10.0, account, account));
+        assertEquals(100.0, account.getBalance(), 0.001);
+        assertEquals(historyBefore, service.getHistory().size());
+    }
+
+    // -----------------------------------------------------------------------
+    // sameAccountTransferWithZeroAmountThrowsAmountMustBePositive
+    // -----------------------------------------------------------------------
+    @Test
+    void sameAccountTransferWithZeroAmountThrowsAmountMustBePositive() {
+        Account account = new Account("ACC-123", "Alice", 100.0);
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> service.transfer("ACC-123", "ACC-123", 0.0, account, account)
+        );
+        assertEquals("Amount must be positive", ex.getMessage());
+    }
+
+    // -----------------------------------------------------------------------
+    // differentAccountTransferSucceedsAfterChange
+    // -----------------------------------------------------------------------
+    @Test
+    void differentAccountTransferSucceedsAfterChange() {
+        Account from = new Account("ACC-123", "Alice", 100.0);
+        Account to = new Account("ACC-456", "Bob", 50.0);
+        service.transfer("ACC-123", "ACC-456", 30.0, from, to);
+        assertEquals(70.0, from.getBalance(), 0.001);
+        assertEquals(80.0, to.getBalance(), 0.001);
+        assertEquals(1, service.getHistory().size());
+    }
 }
