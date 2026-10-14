@@ -1,38 +1,38 @@
 package com.bank;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
+/**
+ * Moves money between two {@link Account}s and keeps a log of every
+ * transfer made.
+ */
 public class TransferService {
 
     private final List<Transaction> history = new ArrayList<>();
 
-    public void transfer(String fromAccountId, String toAccountId, double amount, Account fromAccount, Account toAccount) {
+    /**
+     * Move {@code amount} from {@code from} to {@code to}.
+     *
+     * Validates that {@code amount} is positive and that {@code from}
+     * has sufficient balance before proceeding with the transfer.
+     */
+    public Transaction transfer(Account from, Account to, double amount) {
         if (amount <= 0) {
             throw new IllegalArgumentException("Amount must be positive");
         }
-        if (fromAccount.getBalance() < amount) {
-            throw new IllegalStateException("Insufficient funds");
+        if (from.getBalance() < amount) {
+            throw new IllegalStateException("Insufficient balance");
         }
-        fromAccount.debit(amount);
-        toAccount.credit(amount);
-        history.add(new Transaction(fromAccountId, toAccountId, amount));
+        from.withdraw(amount);
+        to.deposit(amount);
+
+        Transaction transaction = new Transaction(from.getAccountId(), to.getAccountId(), amount);
+        history.add(transaction);
+        return transaction;
     }
 
     public List<Transaction> getHistory() {
-        return Collections.unmodifiableList(history);
-    }
-
-    public List<Transaction> getHistoryFor(String accountId) {
-        if (accountId == null || accountId.isEmpty()) {
-            throw new IllegalArgumentException("accountId is required");
-        }
-        List<Transaction> filtered = history.stream()
-                .filter(t -> t.getFromAccountId().equals(accountId)
-                          || t.getToAccountId().equals(accountId))
-                .collect(Collectors.toList());
-        return Collections.unmodifiableList(filtered);
+        return history;
     }
 }
