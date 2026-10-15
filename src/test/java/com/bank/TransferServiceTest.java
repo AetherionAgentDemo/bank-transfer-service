@@ -75,4 +75,51 @@ class TransferServiceTest {
         // package (com.bank), so it can call it directly.
         account.withdraw(amount);
     }
+
+    @Test
+    void transferRecordsReferenceInTransaction() {
+        TransferService service = new TransferService();
+        Account from = new Account("A1", "Alice", 100.0);
+        Account to = new Account("A2", "Bob", 50.0);
+
+        Transaction transaction = service.transfer(from, to, 30.0, "rent");
+
+        assertEquals("rent", transaction.getReference());
+        assertEquals(1, service.getHistory().size());
+        assertEquals(transaction, service.getHistory().get(0));
+    }
+
+    @Test
+    void transferRecordsEmptyReferenceWhenNullOrMissing() {
+        TransferService service = new TransferService();
+        Account from = new Account("A1", "Alice", 100.0);
+        Account to = new Account("A2", "Bob", 50.0);
+
+        Transaction transaction = service.transfer(from, to, 30.0);
+
+        assertEquals("", transaction.getReference());
+        assertEquals(1, service.getHistory().size());
+        assertEquals(transaction, service.getHistory().get(0));
+    }
+
+    @Test
+    void transactionConstructorHandlesNullReference() {
+        Transaction transaction = new Transaction("A1", "A2", 50.0, null);
+        assertEquals("", transaction.getReference());
+    }
+
+    @Test
+    void transferRejectsOverlongReference() {
+        TransferService service = new TransferService();
+        Account from = new Account("A1", "Alice", 100.0);
+        Account to = new Account("A2", "Bob", 50.0);
+
+        String longReference = "a".repeat(141);
+        assertThrows(IllegalArgumentException.class, () -> service.transfer(from, to, 30.0, longReference), "Reference too long");
+
+        // Check balances remain unchanged
+        assertEquals(100.0, from.getBalance(), 0.001);
+        assertEquals(50.0, to.getBalance(), 0.001);
+        assertEquals(0, service.getHistory().size());
+    }
 }
