@@ -11,10 +11,14 @@ public class Transaction {
     private final Instant timestamp;
 
     public Transaction(String fromAccountId, String toAccountId, double amount) {
+        this(fromAccountId, toAccountId, amount, Instant.now());
+    }
+
+    public Transaction(String fromAccountId, String toAccountId, double amount, Instant timestamp) {
         this.fromAccountId = fromAccountId;
         this.toAccountId = toAccountId;
         this.amount = amount;
-        this.timestamp = Instant.now();
+        this.timestamp = timestamp;
     }
 
     public String getFromAccountId() {
