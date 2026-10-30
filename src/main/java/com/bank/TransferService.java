@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
  * Moves money between two {@link Account}s and keeps a log of every
@@ -17,6 +18,10 @@ public class TransferService {
     static final ZoneId IST = ZoneId.of("Asia/Kolkata");
     static final long DAILY_LIMIT_PAISE = 20_000_000L;
     static final String DAILY_LIMIT_MESSAGE = "Daily transfer limit of \u20B92,00,000 exceeded.";
+
+    static final int REMARK_MAX_GRAPHEMES = 60;
+    private static final Pattern GRAPHEME = Pattern.compile("\\X");
+    private static final Pattern REMARK_ALLOWED = Pattern.compile("[A-Za-z0-9 .,/-]*");
 
     private final List<Transaction> history = new ArrayList<>();
     private final Clock clock;
@@ -36,6 +41,14 @@ public class TransferService {
      * has sufficient balance before proceeding with the transfer.
      */
     public synchronized Transaction transfer(Account from, Account to, double amount) {
+        return transfer(from, to, amount, null);
+    }
+
+    /**
+     * Move {@code amount} from {@code from} to {@code to} with an optional
+     * reference note, which is validated before any money moves.
+     */
+    public synchronized Transaction transfer(Account from, Account to, double amount, String remark) {
         if (amount <= 0) {
             throw new IllegalArgumentException("Amount must be positive");
         }
@@ -45,16 +58,31 @@ public class TransferService {
         if (from.getBalance() < amount) {
             throw new IllegalStateException("Insufficient balance");
         }
+        String note = normalizeRemark(remark);
         from.withdraw(amount);
         to.deposit(amount);
 
-        Transaction transaction = new Transaction(from.getAccountId(), to.getAccountId(), amount, Instant.now(clock));
+        Transaction transaction = new Transaction(from.getAccountId(), to.getAccountId(), amount, Instant.now(clock), note);
         history.add(transaction);
         return transaction;
     }
 
     public List<Transaction> getHistory() {
         return history;
+    }
+
+    private static String normalizeRemark(String remark) {
+        if (remark == null) {
+            return "";
+        }
+        String trimmed = remark.replaceAll("^ +| +$", "");
+        if (GRAPHEME.matcher(trimmed).results().count() > REMARK_MAX_GRAPHEMES) {
+            throw new IllegalArgumentException("Reference note too long (max 60)");
+        }
+        if (!REMARK_ALLOWED.matcher(trimmed).matches()) {
+            throw new IllegalArgumentException("Remark contains characters that are not allowed.");
+        }
+        return trimmed;
     }
 
     private long dailyOutgoingPaise(String accountId) {

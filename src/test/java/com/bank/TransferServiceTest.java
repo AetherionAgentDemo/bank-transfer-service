@@ -94,6 +94,128 @@ class TransferServiceTest {
     }
 
     // ---------------------------------------------------------------
+    // Reference note / remark (BTS-38)
+    // ---------------------------------------------------------------
+
+    @Test
+    void transferWithRemarkSavesAndShowsNote() {
+        TransferService service = new TransferService();
+        Account from = new Account("A1", "Alice", 100.0);
+        Account to = new Account("A2", "Bob", 50.0);
+
+        service.transfer(from, to, 30.0, "rent October");
+
+        assertEquals(70.0, from.getBalance(), 0.001);
+        assertEquals(80.0, to.getBalance(), 0.001);
+        assertEquals(1, service.getHistory().size());
+        assertEquals("rent October", service.getHistory().get(0).getRemark());
+        assertEquals(30.0, service.getHistory().get(0).getAmount(), 0.001);
+    }
+
+    @Test
+    void transferRejectsRemarkLongerThan60WithUnchangedState() {
+        TransferService service = new TransferService();
+        Account from = new Account("A1", "Alice", 100.0);
+        Account to = new Account("A2", "Bob", 50.0);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.transfer(from, to, 30.0, "a".repeat(61)));
+        assertEquals("Reference note too long (max 60)", ex.getMessage());
+        assertEquals(100.0, from.getBalance(), 0.001);
+        assertEquals(50.0, to.getBalance(), 0.001);
+        assertEquals(0, service.getHistory().size());
+    }
+
+    @Test
+    void transferAcceptsRemarkOfExactly60Characters() {
+        TransferService service = new TransferService();
+        Account from = new Account("A1", "Alice", 100.0);
+        Account to = new Account("A2", "Bob", 50.0);
+        String note = "a".repeat(60);
+
+        service.transfer(from, to, 30.0, note);
+
+        assertEquals(note, service.getHistory().get(0).getRemark());
+        assertEquals(70.0, from.getBalance(), 0.001);
+    }
+
+    @Test
+    void transferAccepts60CharactersWithTrailingSpaces() {
+        TransferService service = new TransferService();
+        Account from = new Account("A1", "Alice", 100.0);
+        Account to = new Account("A2", "Bob", 50.0);
+        String note = "a".repeat(60);
+
+        service.transfer(from, to, 30.0, note + "   ");
+
+        assertEquals(note, service.getHistory().get(0).getRemark());
+    }
+
+    @Test
+    void transferWithoutNoteRecordsEmptyRemark() {
+        TransferService service = new TransferService();
+        Account from = new Account("A1", "Alice", 100.0);
+        Account to = new Account("A2", "Bob", 50.0);
+
+        service.transfer(from, to, 30.0);
+        service.transfer(from, to, 10.0, null);
+        service.transfer(from, to, 10.0, " ");
+        service.transfer(from, to, 10.0, "");
+
+        assertEquals(4, service.getHistory().size());
+        for (Transaction t : service.getHistory()) {
+            assertEquals("", t.getRemark());
+        }
+        assertEquals(40.0, from.getBalance(), 0.001);
+    }
+
+    @Test
+    void transferTrimsEdgeSpacesFromRemark() {
+        TransferService service = new TransferService();
+        Account from = new Account("A1", "Alice", 100.0);
+        Account to = new Account("A2", "Bob", 50.0);
+
+        service.transfer(from, to, 30.0, " rent October ");
+
+        assertEquals("rent October", service.getHistory().get(0).getRemark());
+    }
+
+    @Test
+    void transferRejectsRemarkWithDisallowedCharacters() {
+        TransferService service = new TransferService();
+        Account from = new Account("A1", "Alice", 100.0);
+        Account to = new Account("A2", "Bob", 50.0);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.transfer(from, to, 30.0, "rent<script>"));
+        assertEquals("Remark contains characters that are not allowed.", ex.getMessage());
+        assertEquals(100.0, from.getBalance(), 0.001);
+        assertEquals(50.0, to.getBalance(), 0.001);
+        assertEquals(0, service.getHistory().size());
+    }
+
+    @Test
+    void insufficientBalanceTakesPrecedenceOverRemarkValidation() {
+        TransferService service = new TransferService();
+        Account from = new Account("A1", "Alice", 10.0);
+        Account to = new Account("A2", "Bob", 50.0);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> service.transfer(from, to, 100.0, "a".repeat(61)));
+        assertEquals("Insufficient balance", ex.getMessage());
+        assertEquals(10.0, from.getBalance(), 0.001);
+        assertEquals(0, service.getHistory().size());
+    }
+
+    @Test
+    void transactionConstructorsRecordEmptyRemarkByDefaultAndForNull() {
+        assertEquals("", new Transaction("A1", "A2", 30.0, Instant.EPOCH).getRemark());
+        assertEquals("", new Transaction("A1", "A2", 30.0, Instant.EPOCH, null).getRemark());
+        assertEquals("", new Transaction("A1", "A2", 30.0).getRemark());
+        assertEquals("rent", new Transaction("A1", "A2", 30.0, Instant.EPOCH, "rent").getRemark());
+    }
+
+    // ---------------------------------------------------------------
     // Daily transfer limit (\u20B92,00,000 per sender per IST day)
     // ---------------------------------------------------------------
 
